@@ -49,3 +49,5 @@ go.work
 # #
 
 __pycache__/
+
+docs/img/.src/banner.psd
