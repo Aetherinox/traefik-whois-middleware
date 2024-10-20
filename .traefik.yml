@@ -1,0 +1,8 @@
+﻿displayName: Whois Middleware
+type: middleware
+iconPath: .assets/logo.png
+import: github.com/Aetherinox/traefik-whois-middleware
+summary: "Provides detailed console logs about each connection that accesses a traefik route"
+
+testData:
+  debugLogs: false
