@@ -194,18 +194,7 @@ http:
     whois:
       plugin:
         traefik-whois-middleware:
-          authenticationHeader: true
-          authenticationHeaderName: X-API-TOKEN
-          authenticationErrorMsg: "Invalid token"
-          bearerHeader: true
-          bearerHeaderName: Authorization
-          removeHeadersOnSuccess: true
-          removeTokenNameOnFailure: false
-          timestampUnix: false
-          permissiveMode: false
           debugLogs: true
-          tokens:
-            - your-whois
 
     routers:
         traefik-http:
