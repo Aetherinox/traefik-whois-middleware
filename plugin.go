@@ -92,6 +92,7 @@ const (
 */
 
 type Config struct {
+	Name						string		`json:"name,omitempty"`
 	DebugLogs					bool		`json:"debugLogs,omitempty"`
 }
 
@@ -101,12 +102,14 @@ type Config struct {
 
 func CreateConfig() *Config {
 	return &Config{
+		Name: 						"General",
 		DebugLogs:					false,
 	}
 }
 
-type KeyAuth struct {
+type Whois struct {
 	next                     	http.Handler
+	name 						string
 	debugLogs           		bool
 }
 
@@ -178,20 +181,20 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		return structure
 	*/
 
-	return &KeyAuth {
+	return &Whois {
 		next:                     	next,
+		name: 						config.Name,
 		debugLogs:					config.DebugLogs,
 	}, nil
 }
 
 /*
-	taken api tokens and compare to list of valid tokens.
-	return if specified token is valid
+	Finds an item in a string array
 */
 
-func contains(token string, validTokens []string) bool {
-	for _, a := range validTokens {
-		if a == token {
+func contains(needle string, haystack []string) bool {
+	for _, a := range haystack {
+		if a == needle {
 			return true
 		}
 	}
@@ -214,9 +217,9 @@ func get(val string, deflt string) string  {
 	Serve
 */
 
-func (ka *KeyAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (who *Whois) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
-	reqIPAddr, err := ka.collectRemoteIP(req)
+	reqIPAddr, err := who.collectRemoteIP(req)
 
 	if err != nil {
 		logErr.Printf(Reset + "Error: " + Yellow + "%s" + Reset, err)
@@ -226,6 +229,8 @@ func (ka *KeyAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	urlFull := fmt.Sprintf("%s%s", req.Host, req.URL)
 	userAgent := req.UserAgent()
 	userIp := "Unknown"
+	containerName := get(who.name, "none")
+	containerLabel := Green + "[" + containerName + "] " + Reset
 
 	/*
 		logs > output user
@@ -234,38 +239,67 @@ func (ka *KeyAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	for _, ipAddress := range reqIPAddr {
 		userIp = ipAddress.String()
-		logInfo.Printf(Reset + "New connection from " + Yellow + "%s" + Reset + " for url " + Yellow + "%s" + Reset, userIp, urlFull)
+		logInfo.Printf(containerLabel + Reset + "New connection from " + Yellow + "%s" + Reset + " for url " + Yellow + "%s" + Reset, userIp, urlFull)
 	}
 
 	/*
-		Debug Logs
-		All users should pass this step before being directed to their proper destinations
+		Define > Values
 	*/
 
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "Host", req.Host)
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "Remote Address", req.RemoteAddr)
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "User Agent", userAgent)
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "User IP", userIp)
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "User (X-Forwarded-For)",  get(req.Header.Get("X-Forwarded-For"), "none"))
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "User (X-Real-IP)", get(req.Header.Get("X-Real-IP"), "none"))
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "User (X-IPCountry)", get(req.Header.Get("X-IPCountry"), "none"))
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "User (Cf-Connecting-Ip)", get(req.Header.Get("Cf-Connecting-Ip"), "none"))
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "User Country (Cf-Ipcountry)", get(req.Header.Get("Cf-Ipcountry"), "none"))
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "Target URL", urlFull)
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "Request URI", req.RequestURI)
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "Request URL", req.URL)
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "Method", req.Method)
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "Prototype", req.Proto)
-	logInfo.Printf(Yellow + "%s :" + Reset + " %s ", "Timestamp", now)
+	hdr_real_ip := req.Header.Get("X-Real-IP")
+	hdr_x_forward_for := req.Header.Get("X-Forwarded-For")
+	hdr_x_ipcountry := req.Header.Get("X-IPCountry")
+	hdr_cf_ip_connecting := req.Header.Get("Cf-Connecting-Ip")
+	hdr_cf_ipcountry := req.Header.Get("Cf-Ipcountry")
 
-	ka.next.ServeHTTP(rw, req)
+	/*
+		Output
+	*/
+
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "Host", req.Host)
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "Target URL", urlFull)
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "Remote Address", req.RemoteAddr)
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "User Agent", userAgent)
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "User IP", userIp)
+
+	if len(hdr_real_ip) > 1 {
+		logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "User (X-Real-IP)", get(hdr_real_ip, "none"))
+	}
+
+	if len(hdr_x_forward_for) > 1 {
+		logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "User (X-Forwarded-For)",  get(hdr_x_forward_for, "none"))
+	}
+
+	if len(hdr_x_ipcountry) > 1 {
+		logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "User (X-IPCountry)", get(hdr_x_ipcountry, "none"))
+	}
+
+	if len(hdr_cf_ip_connecting) > 1 {
+		logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "User (Cf-Connecting-Ip)", get(hdr_cf_ip_connecting, "none"))
+	}
+
+	if len(hdr_cf_ipcountry) > 1 {
+		logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "User Country (Cf-Ipcountry)", get(hdr_cf_ipcountry, "none"))
+	}
+
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "Request URI", req.RequestURI)
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "Request URL", req.URL)
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "Method", req.Method)
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "Prototype", req.Proto)
+	logInfo.Printf(containerLabel + Yellow + "%s :" + Reset + " %s ", "Timestamp", now)
+
+	/*
+		Continue
+	*/
+
+	who.next.ServeHTTP(rw, req)
 }
 
 /*
 	Collect Remote IP
 */
 
-func (a *KeyAuth) collectRemoteIP(req *http.Request) ([]*net.IP, error) {
+func (a *Whois) collectRemoteIP(req *http.Request) ([]*net.IP, error) {
 	var ipList []*net.IP
 
 	splitFn := func(c rune) bool {
